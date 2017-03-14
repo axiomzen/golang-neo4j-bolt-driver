@@ -48,8 +48,6 @@ type Conn interface {
 	// ExecPipeline executes a query using the neo4j-specific interface
 	// pipelining multiple statements
 	ExecPipeline(query []string, params ...map[string]interface{}) ([]Result, error)
-	// Close closes the connection
-	//Close() error
 	// Begin starts a new transaction
 	Begin() (driver.Tx, error)
 	// SetChunkSize is used to set the max chunk size of the
