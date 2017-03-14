@@ -13,6 +13,10 @@ before_install:
   - echo -e "machine github.com\n  login $CI_USER_TOKEN" >> ~/.netrc
   - docker run --detach --publish=7474:7474 --publish=7687:7687 --env=NEO4J_AUTH=none --volume=$HOME/neo4j/data:/data neo4j
 
+script:
+  - go build ./...
+  - BOLT_DRIVER_LOG=info NEO4J_BOLT=bolt://localhost:7687 go test -coverprofile=cover.out -coverpkg=./... -v -race
+
 # jdk:
 #   - oraclejdk7
 # before_install:
