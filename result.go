@@ -1,6 +1,6 @@
-package golangNeo4jBoltDriver
+package bolt
 
-import "github.com/johnnadratowski/golang-neo4j-bolt-driver/errors"
+import "github.com/axiomzen/golang-neo4j-bolt-driver/errors"
 
 // Result represents a result from a query that returns no data
 type Result interface {

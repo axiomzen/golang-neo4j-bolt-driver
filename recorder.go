@@ -1,4 +1,4 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
 	"bytes"
@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/encoding"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/errors"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/log"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/encoding"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/errors"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/log"
 )
 
 // recorder records a given session with Neo4j.

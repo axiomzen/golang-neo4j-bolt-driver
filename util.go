@@ -1,11 +1,11 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
 
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/encoding"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/encoding"
 )
 
 // sprintByteHex returns a formatted string of the byte array in hexadecimal

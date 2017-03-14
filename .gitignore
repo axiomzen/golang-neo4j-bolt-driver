@@ -61,3 +61,5 @@ tags
 
 # Don't commit folder with temp data
 /tmp/
+
+cover.out

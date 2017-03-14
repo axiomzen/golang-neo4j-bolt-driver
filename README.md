@@ -1,12 +1,12 @@
 # Golang Neo4J Bolt Driver
-[![Build Status](https://travis-ci.org/johnnadratowski/golang-neo4j-bolt-driver.svg?branch=master)](https://travis-ci.org/johnnadratowski/golang-neo4j-bolt-driver) *Tested against Golang 1.4.3 and up*
+[![Build Status](https://travis-ci.org/axiomzen/golang-neo4j-bolt-driver.svg?branch=master)](https://travis-ci.org/axiomzen/golang-neo4j-bolt-driver) *Tested against Golang 1.4.3 and up*
 
 
 Implements the Neo4J Bolt Protocol specification:
 As of the time of writing this, the current version is v3.1.0-M02
 
 ```
-go get github.com/johnnadratowski/golang-neo4j-bolt-driver
+go get github.com/axiomzen/golang-neo4j-bolt-driver
 ```
 
 ## Features
@@ -194,7 +194,7 @@ func slowNClean() {
 ```
 ## API
 
-*_There is much more detailed information in [the godoc](http://godoc.org/github.com/johnnadratowski/golang-neo4j-bolt-driver)_*
+*_There is much more detailed information in [the godoc](http://godoc.org/github.com/axiomzen/golang-neo4j-bolt-driver)_*
 
 This implementation attempts to follow the best practices as per the Bolt specification, but also implements compatibility with Golang's `sql.driver` interface.
 
@@ -205,8 +205,7 @@ It is recommended that you use the Neo4j Bolt-specific interfaces if possible.  
 The URL format is: `bolt://(user):(password)@(host):(port)`
 Schema must be `bolt`. User and password is only necessary if you are authenticating.
 
-Connection pooling is provided out of the box with the `NewDriverPool` method.  You can give it the maximum number of
-connections to have at a time.
+Connection pooling is provided out of the box with the `NewDriverPool` method.  A bunch of options (use `DefaultPoolOptions` for defaults)
 
 You can get logs from the driver by setting the log level using the `log` packages `SetLevel`.
 
@@ -236,6 +235,10 @@ The tests are written in an integration testing style.  Most of them are in the 
 In order to get CI, I made a recorder mechanism so you don't need to run neo4j alongside the tests in the CI server.  You run the tests locally against a neo4j instance with the RECORD_OUTPUT=1 environment variable, it generates the recordings in the ./recordings folder.  This is necessary if the tests have changed, or if the internals have significantly changed.  Installing the git hooks will run the tests automatically on push.  If there are updated tests, you will need to re-run the recorder to add them and push them as well.
 
 You need access to a running Neo4J database to develop for this project, so that you can run the tests to generate the recordings.
+
+Easiest way is with docker:
+
+`docker run --publish=7474:7474 --publish=7687:7687 --env=NEO4J_AUTH=none --volume=$HOME/neo4j/data:/data neo4j`
 
 ## TODO
 

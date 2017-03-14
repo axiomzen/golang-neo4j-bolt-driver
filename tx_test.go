@@ -1,18 +1,21 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/graph"
 	"io"
 	"testing"
+
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/graph"
 )
 
 func TestBoltTx_Commit(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltTx_Commit", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -97,12 +100,14 @@ func TestBoltTx_Commit(t *testing.T) {
 }
 
 func TestBoltTx_Rollback(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltTx_Rollback", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}

@@ -1,4 +1,4 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
 	"io"
@@ -11,17 +11,19 @@ import (
 
 	"database/sql"
 
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/encoding"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/graph"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/encoding"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/graph"
 )
 
 func TestBoltStmt_SelectOne(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectOne", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -37,8 +39,10 @@ func TestBoltStmt_SelectOne(t *testing.T) {
 	}
 
 	expectedMetadata := map[string]interface{}{
-		"fields": []interface{}{"1"},
+		"result_available_after": rows.Metadata()["result_available_after"],
+		"fields":                 []interface{}{"1"},
 	}
+
 	if !reflect.DeepEqual(rows.Metadata(), expectedMetadata) {
 		t.Fatalf("Unexpected success metadata. Expected %#v. Got: %#v", expectedMetadata, rows.Metadata())
 	}
@@ -53,7 +57,10 @@ func TestBoltStmt_SelectOne(t *testing.T) {
 	}
 
 	_, metadata, err := rows.NextNeo()
-	expectedMetadata = map[string]interface{}{"type": "r"}
+	expectedMetadata = map[string]interface{}{
+		"result_consumed_after": metadata["result_consumed_after"],
+		"type":                  "r",
+	}
 	if err != io.EOF {
 		t.Fatalf("Unexpected row closed output. Expected io.EOF. Got: %s", err)
 	} else if !reflect.DeepEqual(metadata, expectedMetadata) {
@@ -67,12 +74,14 @@ func TestBoltStmt_SelectOne(t *testing.T) {
 }
 
 func TestBoltStmt_SelectMany(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectMany", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -88,8 +97,10 @@ func TestBoltStmt_SelectMany(t *testing.T) {
 	}
 
 	expectedMetadata := map[string]interface{}{
-		"fields": []interface{}{"1", "34234.34323", "\"string\"", "[1, \"2\", 3, true, null]", "true", "null"},
+		"result_available_after": rows.Metadata()["result_available_after"],
+		"fields":                 []interface{}{"1", "34234.34323", "\"string\"", "[1, \"2\", 3, true, null]", "true", "null"},
 	}
+
 	if !reflect.DeepEqual(rows.Metadata(), expectedMetadata) {
 		t.Fatalf("Unexpected success metadata. Expected %#v. Got: %#v", expectedMetadata, rows.Metadata())
 	}
@@ -119,7 +130,11 @@ func TestBoltStmt_SelectMany(t *testing.T) {
 	}
 
 	_, metadata, err := rows.NextNeo()
-	expectedMetadata = map[string]interface{}{"type": "r"}
+	expectedMetadata = map[string]interface{}{
+		"result_consumed_after": metadata["result_consumed_after"],
+		"type":                  "r",
+	}
+
 	if err != io.EOF {
 		t.Fatalf("Unexpected row closed output. Expected io.EOF. Got: %s", err)
 	} else if !reflect.DeepEqual(metadata, expectedMetadata) {
@@ -133,12 +148,14 @@ func TestBoltStmt_SelectMany(t *testing.T) {
 }
 
 func TestBoltStmt_InvalidArgs(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_InvalidArgs", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -170,12 +187,14 @@ func TestBoltStmt_InvalidArgs(t *testing.T) {
 }
 
 func TestBoltStmt_ExecNeo(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_ExecNeo", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -261,12 +280,14 @@ func TestBoltStmt_ExecNeo(t *testing.T) {
 }
 
 func TestBoltStmt_CreateArgs(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_CreateArgs", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -332,12 +353,14 @@ func TestBoltStmt_CreateArgs(t *testing.T) {
 }
 
 func TestBoltStmt_Discard(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_Discard", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -425,12 +448,14 @@ func TestBoltStmt_Discard(t *testing.T) {
 }
 
 func TestBoltStmt_Failure(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_Failure", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -530,12 +555,14 @@ func TestBoltStmt_Failure(t *testing.T) {
 }
 
 func TestBoltStmt_MixedObjects(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_MixedObjects", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -591,12 +618,14 @@ func TestBoltStmt_MixedObjects(t *testing.T) {
 }
 
 func TestBoltStmt_Path(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_Path", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -669,12 +698,14 @@ func TestBoltStmt_Path(t *testing.T) {
 }
 
 func TestBoltStmt_SingleRel(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SingleRel", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -749,12 +780,14 @@ func TestBoltStmt_SingleRel(t *testing.T) {
 }
 
 func TestBoltStmt_SingleNode(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SingleNode", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -829,12 +862,14 @@ func TestBoltStmt_SingleNode(t *testing.T) {
 }
 
 func TestBoltStmt_SelectIntLimits(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectIntLimits", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -905,12 +940,14 @@ func TestBoltStmt_SelectIntLimits(t *testing.T) {
 }
 
 func TestBoltStmt_SelectStringLimits(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectStringLimits", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -966,12 +1003,14 @@ func TestBoltStmt_SelectStringLimits(t *testing.T) {
 }
 
 func TestBoltStmt_SelectSliceLimits(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectSliceLimits", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1033,12 +1072,14 @@ func TestBoltStmt_SelectSliceLimits(t *testing.T) {
 }
 
 func TestBoltStmt_SelectMapLimits(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_SelectMapLimits", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1111,12 +1152,14 @@ func TestBoltStmt_SelectMapLimits(t *testing.T) {
 }
 
 func TestBoltStmt_ManyChunks(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_ManyChunks", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1164,12 +1207,14 @@ func TestBoltStmt_ManyChunks(t *testing.T) {
 }
 
 func TestBoltStmt_PipelineExec(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_PipelineExec", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1291,12 +1336,14 @@ func TestBoltStmt_PipelineExec(t *testing.T) {
 }
 
 func TestBoltStmt_PipelineQuery(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_PipelineQuery", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1411,12 +1458,14 @@ func TestBoltStmt_PipelineQuery(t *testing.T) {
 }
 
 func TestBoltStmt_PipelineQueryCloseBeginning(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_PipelineQueryCloseBeginning", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -1488,12 +1537,14 @@ func TestBoltStmt_PipelineQueryCloseBeginning(t *testing.T) {
 }
 
 func TestBoltStmt_PipelineQueryCloseMiddle(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltStmt_PipelineQueryCloseMiddle", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}

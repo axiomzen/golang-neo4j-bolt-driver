@@ -1,77 +1,80 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/errors"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/messages"
 	"io"
 	"reflect"
 	"testing"
+
+	"github.com/axiomzen/golang-neo4j-bolt-driver/errors"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/messages"
 )
 
 func TestBoltConn_parseURL(t *testing.T) {
-	c := &boltConn{connStr: "http://foo:7687"}
-
-	_, err := c.parseURL()
+	p := URLParse{}
+	err := p.ParseURL("http://foo:7687")
 	if err == nil {
 		t.Fatal("Expected error from incorrect protocol")
 	}
 
-	c = &boltConn{connStr: "bolt://john@foo:7687"}
-	_, err = c.parseURL()
+	p = URLParse{}
+	err = p.ParseURL("bolt://john@foo:7687")
 	if err == nil {
 		t.Fatal("Expected error from missing password")
 	}
 
-	c = &boltConn{connStr: "bolt://john:password@foo:7687"}
-	_, err = c.parseURL()
+	p = URLParse{}
+	err = p.ParseURL("bolt://john:password@foo:7687")
 	if err != nil {
 		t.Fatal("Should not error on valid url")
 	}
-	if c.user != "john" {
+
+	if p.User != "john" {
 		t.Fatal("Expected user to be 'john'")
 	}
-	if c.password != "password" {
+	if p.Password != "password" {
 		t.Fatal("Expected password to be 'password'")
 	}
 
-	c = &boltConn{connStr: "bolt://john:password@foo:7687?tls=true"}
-	_, err = c.parseURL()
+	p = URLParse{}
+	err = p.ParseURL("bolt://john:password@foo:7687?tls=true")
 	if err != nil {
 		t.Fatal("Should not error on valid url")
 	}
-	if !c.useTLS {
+	if !p.UseTLS {
 		t.Fatal("Expected to use TLS")
 	}
 
-	c = &boltConn{connStr: "bolt://john:password@foo:7687?tls=true&tls_no_verify=1&tls_ca_cert_file=ca&tls_cert_file=cert&tls_key_file=key"}
-	_, err = c.parseURL()
+	p = URLParse{}
+	err = p.ParseURL("bolt://john:password@foo:7687?tls=true&tls_no_verify=1&tls_ca_cert_file=ca&tls_cert_file=cert&tls_key_file=key")
 	if err != nil {
 		t.Fatal("Should not error on valid url")
 	}
-	if !c.useTLS {
+	if !p.UseTLS {
 		t.Fatal("Expected to use TLS")
 	}
-	if !c.tlsNoVerify {
+	if !p.TLSNoVerify {
 		t.Fatal("Expected to use TLS with no verification")
 	}
-	if c.caCertFile != "ca" {
+	if p.CaCertFile != "ca" {
 		t.Fatal("Expected ca cert file 'ca'")
 	}
-	if c.certFile != "cert" {
+	if p.CertFile != "cert" {
 		t.Fatal("Expected cert file 'cert'")
 	}
-	if c.keyFile != "key" {
+	if p.KeyFile != "key" {
 		t.Fatal("Expected key file 'key'")
 	}
 }
 
 func TestBoltConn_Close(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_Close", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -87,12 +90,14 @@ func TestBoltConn_Close(t *testing.T) {
 }
 
 func TestBoltConn_SelectOne(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_SelectOne", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -103,8 +108,10 @@ func TestBoltConn_SelectOne(t *testing.T) {
 	}
 
 	expectedMetadata := map[string]interface{}{
-		"fields": []interface{}{"1"},
+		"result_available_after": rows.Metadata()["result_available_after"],
+		"fields":                 []interface{}{"1"},
 	}
+
 	if !reflect.DeepEqual(rows.Metadata(), expectedMetadata) {
 		t.Fatalf("Unexpected success metadata. Expected %#v. Got: %#v", expectedMetadata, rows.Metadata())
 	}
@@ -119,7 +126,11 @@ func TestBoltConn_SelectOne(t *testing.T) {
 	}
 
 	_, metadata, err := rows.NextNeo()
-	expectedMetadata = map[string]interface{}{"type": "r"}
+	expectedMetadata = map[string]interface{}{
+		"result_consumed_after": metadata["result_consumed_after"],
+		"type":                  "r",
+	}
+
 	if err != io.EOF {
 		t.Fatalf("Unexpected row closed output. Expected io.EOF. Got: %s", err)
 	} else if !reflect.DeepEqual(metadata, expectedMetadata) {
@@ -133,12 +144,14 @@ func TestBoltConn_SelectOne(t *testing.T) {
 }
 
 func TestBoltConn_SelectAll(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_SelectAll", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
 	}
@@ -190,12 +203,14 @@ func TestBoltConn_SelectAll(t *testing.T) {
 }
 
 func TestBoltConn_Ignored(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_Ignored", neo4jConnStr)
 
-	conn, _ := driver.OpenNeo(neo4jConnStr)
+	conn, _ := driver.OpenNeo()
 	defer conn.Close()
 
 	// This will make two calls at once - Run and Pull All.  The pull all should be ignored, which is what
@@ -216,12 +231,14 @@ func TestBoltConn_Ignored(t *testing.T) {
 }
 
 func TestBoltConn_IgnoredPipeline(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_IgnoredPipeline", neo4jConnStr)
 
-	conn, _ := driver.OpenNeo(neo4jConnStr)
+	conn, _ := driver.OpenNeo()
 	defer conn.Close()
 
 	// This will make two calls at once - Run and Pull All.  The pull all should be ignored, which is what
@@ -242,12 +259,14 @@ func TestBoltConn_IgnoredPipeline(t *testing.T) {
 }
 
 func TestBoltConn_FailureMessageError(t *testing.T) {
-	driver := NewDriver()
+	options := DefaultDriverOptions()
+	options.Addr = neo4jConnStr
+	driver := NewDriverWithOptions(options)
 
 	// Records session for testing
 	driver.(*boltDriver).recorder = newRecorder("TestBoltConn_FailureMessageError", neo4jConnStr)
 
-	conn, err := driver.OpenNeo(neo4jConnStr)
+	conn, err := driver.OpenNeo()
 	defer conn.Close()
 	if err != nil {
 		t.Fatalf("An error occurred opening conn: %s", err)
