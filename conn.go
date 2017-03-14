@@ -1,26 +1,23 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
 	"bytes"
-	"database/sql/driver"
-	"io/ioutil"
-	"net"
-	"time"
-
-	"net/url"
-	"strings"
-
-	"io"
-	"math"
-
 	"crypto/tls"
 	"crypto/x509"
+	"database/sql/driver"
+	"io"
+	"io/ioutil"
+	"net"
+	"net/url"
 	"strconv"
+	"strings"
+	"time"
 
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/encoding"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/errors"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/log"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/messages"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/encoding"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/errors"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/log"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/messages"
+	"github.com/axiomzen/interpool"
 )
 
 // Conn represents a connection to Neo4J
@@ -33,6 +30,7 @@ import (
 // THREAD SAFE.  If you want to use multipe go routines with these objects,
 // you should use a driver to create a new conn for each routine.
 type Conn interface {
+	interpool.Conn
 	// PrepareNeo prepares a neo4j specific statement
 	PrepareNeo(query string) (Stmt, error)
 	// PreparePipeline prepares a neo4j specific pipeline statement
@@ -51,7 +49,7 @@ type Conn interface {
 	// pipelining multiple statements
 	ExecPipeline(query []string, params ...map[string]interface{}) ([]Result, error)
 	// Close closes the connection
-	Close() error
+	//Close() error
 	// Begin starts a new transaction
 	Begin() (driver.Tx, error)
 	// SetChunkSize is used to set the max chunk size of the
@@ -59,47 +57,52 @@ type Conn interface {
 	SetChunkSize(uint16)
 	// SetTimeout sets the read/write timeouts for the
 	// connection to Neo4j
-	SetTimeout(time.Duration)
+	//SetTimeout(time.Duration)
+	// setPool will set the driver pool
+	//setPool(DriverPool)
 }
 
+// ErrClosed is when you attempt to use a closed connection
+var ErrClosed = errors.New("connection is closed")
+
+// todo: add fields that are needed via the other one
 type boltConn struct {
-	connStr       string
+	options       *DriverOptions
 	url           *url.URL
 	user          string
 	password      string
 	conn          net.Conn
 	connErr       error
 	serverVersion []byte
-	timeout       time.Duration
-	chunkSize     uint16
 	closed        bool
-	useTLS        bool
-	certFile      string
-	caCertFile    string
-	keyFile       string
-	tlsNoVerify   bool
-	transaction   *boltTx
-	statement     *boltStmt
-	driver        *boltDriver
-	poolDriver    DriverPool
-}
+	// TODO: figure out tls
+	tlsConfig *tls.Config
 
-func createBoltConn(connStr string) *boltConn {
-	return &boltConn{
-		connStr:       connStr,
-		timeout:       time.Second * time.Duration(60),
-		chunkSize:     math.MaxUint16,
-		serverVersion: make([]byte, 4),
-	}
+	//certFile   string
+	//caCertFile string
+	//keyFile    string
+	//tlsNoVerify   bool
+	//poolDriver DriverPool
+	pooled bool
+
+	transaction *boltTx
+	statement   *boltStmt
+
+	initedAt time.Time
+	usedAt   time.Time
 }
 
 // newBoltConn Creates a new bolt connection
-func newBoltConn(connStr string, driver *boltDriver) (*boltConn, error) {
+func newBoltConn(d *boltDriver, pooled bool) (*boltConn, error) {
 
-	c := createBoltConn(connStr)
-	c.driver = driver
+	c := &boltConn{
+		options:       d.options,
+		serverVersion: make([]byte, 4),
+		usedAt:        time.Now(),
+		pooled:        pooled,
+	}
 
-	err := c.initialize()
+	err := c.initialize(d)
 	if err != nil {
 		return nil, errors.Wrap(err, "An error occurred initializing connection")
 	}
@@ -107,105 +110,163 @@ func newBoltConn(connStr string, driver *boltDriver) (*boltConn, error) {
 	return c, nil
 }
 
-// newPooledBoltConn Creates a new bolt connection with a pooled driver
-func newPooledBoltConn(connStr string, driver DriverPool) (*boltConn, error) {
-
-	c := createBoltConn(connStr)
-	c.poolDriver = driver
-
-	return c, nil
+// CheckHealth returns an error if the connection is not healthy
+func (c *boltConn) CheckHealth() error {
+	if c.closed {
+		return ErrClosed
+	} else if c.connErr != nil {
+		return c.connErr
+	}
+	// TODO: see if this is needed or if there is an equivalent
+	// 	if cn.Rd.Buffered() != 0 {
+	// 	b, _ := cn.Rd.Peek(cn.Rd.Buffered())
+	// 	err := fmt.Errorf("connection has unread data:\n%s", hex.Dump(b))
+	// 	return err
+	// }
+	return nil
 }
 
-func (c *boltConn) parseURL() (*url.URL, error) {
-	user := ""
-	password := ""
-	url, err := url.Parse(c.connStr)
+// GetInitedAt implements interpool.Conn.GetInitedAt
+func (c *boltConn) GetInitedAt() time.Time {
+	return c.initedAt
+}
+
+// SetInitedAt implements interpool.Conn.SetInitedAt
+func (c *boltConn) SetInitedAt(t time.Time) {
+	c.initedAt = t
+}
+
+// GetUsedAt implements interpool.Conn.GetUsedAt
+func (c *boltConn) GetUsedAt() time.Time {
+	return c.usedAt
+}
+
+// SetUsedAt implements interpool.Conn.SetUsedAt
+func (c *boltConn) SetUsedAt(t time.Time) {
+	c.usedAt = t
+}
+
+// URLParse is the result from parsing the url
+type URLParse struct {
+	//Scheme      string
+	URL         *url.URL
+	User        string
+	Password    string
+	DialTimeout time.Duration
+	UseTLS      bool
+	CertFile    string
+	KeyFile     string
+	CaCertFile  string
+	TLSNoVerify bool
+}
+
+// ParseURL parses a bolt url
+func (p *URLParse) ParseURL(addr string) error {
+	var err error
+	p.URL, err = url.Parse(addr)
 	if err != nil {
-		return url, errors.Wrap(err, "An error occurred parsing bolt URL")
-	} else if strings.ToLower(url.Scheme) != "bolt" {
-		return url, errors.New("Unsupported connection string scheme: %s. Driver only supports 'bolt' scheme.", url.Scheme)
+		return errors.Wrap(err, "An error occurred parsing bolt URL")
+	} else if strings.ToLower(p.URL.Scheme) != "bolt" {
+		return errors.New("Unsupported connection string scheme: %s. Driver only supports 'bolt' scheme.", p.URL.Scheme)
 	}
 
-	if url.User != nil {
-		c.user = url.User.Username()
+	if p.URL.User != nil {
+		p.User = p.URL.User.Username()
 		var isSet bool
-		c.password, isSet = url.User.Password()
+		p.Password, isSet = p.URL.User.Password()
 		if !isSet {
-			return url, errors.New("Must specify password when passing user")
+			return errors.New("Must specify password when passing user")
 		}
 	}
 
-	timeout := url.Query().Get("timeout")
+	timeout := p.URL.Query().Get("timeout")
 	if timeout != "" {
 		timeoutInt, err := strconv.Atoi(timeout)
 		if err != nil {
-			return url, errors.New("Invalid format for timeout: %s.  Must be integer", timeout)
+			return errors.New("Invalid format for timeout: %s.  Must be integer", timeout)
 		}
 
-		c.timeout = time.Duration(timeoutInt) * time.Second
+		p.DialTimeout = time.Duration(timeoutInt) * time.Second
 	}
 
-	useTLS := url.Query().Get("tls")
-	c.useTLS = strings.HasPrefix(strings.ToLower(useTLS), "t") || useTLS == "1"
+	useTLSStr := p.URL.Query().Get("tls")
+	p.UseTLS = strings.HasPrefix(strings.ToLower(useTLSStr), "t") || useTLSStr == "1"
 
-	if c.useTLS {
-		c.certFile = url.Query().Get("tls_cert_file")
-		c.keyFile = url.Query().Get("tls_key_file")
-		c.caCertFile = url.Query().Get("tls_ca_cert_file")
-		noVerify := url.Query().Get("tls_no_verify")
-		c.tlsNoVerify = strings.HasPrefix(strings.ToLower(noVerify), "t") || noVerify == "1"
+	if p.UseTLS {
+		p.CertFile = p.URL.Query().Get("tls_cert_file")
+		p.KeyFile = p.URL.Query().Get("tls_key_file")
+		p.CaCertFile = p.URL.Query().Get("tls_ca_cert_file")
+		noVerifyStr := p.URL.Query().Get("tls_no_verify")
+		p.TLSNoVerify = strings.HasPrefix(strings.ToLower(noVerifyStr), "t") || noVerifyStr == "1"
 	}
 
-	log.Trace("Bolt Host: ", url.Host)
-	log.Trace("Timeout: ", c.timeout)
-	log.Trace("User: ", user)
-	log.Trace("Password: ", password)
-	log.Trace("TLS: ", c.useTLS)
-	log.Trace("TLS No Verify: ", c.tlsNoVerify)
-	log.Trace("Cert File: ", c.certFile)
-	log.Trace("Key File: ", c.keyFile)
-	log.Trace("CA Cert File: ", c.caCertFile)
+	log.Trace("Bolt Host: ", p.URL.Host)
+	log.Trace("Timeout: ", p.DialTimeout)
+	log.Trace("User: ", p.User)
+	log.Trace("Password: ", p.Password)
+	log.Trace("TLS: ", p.UseTLS)
+	log.Trace("TLS No Verify: ", p.TLSNoVerify)
+	log.Trace("Cert File: ", p.CertFile)
+	log.Trace("Key File: ", p.KeyFile)
+	log.Trace("CA Cert File: ", p.CaCertFile)
 
-	return url, nil
+	return nil
+}
+
+// GetTLSConfig is a helper function to extract the tls config
+func (p *URLParse) GetTLSConfig() (*tls.Config, error) {
+
+	config, err := TLSHelper(p.TLSNoVerify, p.CaCertFile, p.CertFile, p.KeyFile)
+	if err != nil {
+		return nil, errors.Wrap(err, "An error occurred setting up TLS configuration")
+	}
+	return config, nil
 }
 
 func (c *boltConn) createConn() (net.Conn, error) {
 
 	var err error
-	c.url, err = c.parseURL()
+	var p URLParse
+	err = p.ParseURL(c.options.Addr)
 	if err != nil {
 		return nil, errors.Wrap(err, "An error occurred parsing the conn URL")
 	}
+	// set some things
+	c.url = p.URL
+	c.user = p.User
+	c.password = p.Password
 
 	var conn net.Conn
-	if c.useTLS {
-		config, err := c.tlsConfig()
+	if p.UseTLS {
+		// get a tls config from the p
+		c.tlsConfig, err = p.GetTLSConfig()
 		if err != nil {
 			return nil, errors.Wrap(err, "An error occurred setting up TLS configuration")
 		}
-		conn, err = tls.Dial("tcp", c.url.Host, config)
+		conn, err = tls.Dial("tcp", c.url.Host, c.tlsConfig)
 		if err != nil {
-			return nil, errors.Wrap(err, "An error occurred dialing to neo4j")
+			return nil, errors.Wrap(err, "An error occurred dialing to neo4j (tls)")
 		}
 	} else {
-		conn, err = net.DialTimeout("tcp", c.url.Host, c.timeout)
+		conn, err = net.DialTimeout("tcp", c.url.Host, c.options.DialTimeout)
 		if err != nil {
-			return nil, errors.Wrap(err, "An error occurred dialing to neo4j")
+			return nil, errors.Wrap(err, "An error occurred dialing to neo4j (no tls)")
 		}
 	}
 
 	return conn, nil
 }
 
-func (c *boltConn) tlsConfig() (*tls.Config, error) {
+// TLSHelper creates a tls.Config
+func TLSHelper(skipVerify bool, caCertFile, certFile, keyFile string) (*tls.Config, error) {
 	config := &tls.Config{
 		MinVersion: tls.VersionTLS10,
 		MaxVersion: tls.VersionTLS12,
 	}
 
-	if c.caCertFile != "" {
+	if caCertFile != "" {
 		// Load CA cert - usually for self-signed certificates
-		caCert, err := ioutil.ReadFile(c.caCertFile)
+		caCert, err := ioutil.ReadFile(caCertFile)
 		if err != nil {
 			return nil, err
 		}
@@ -215,12 +276,12 @@ func (c *boltConn) tlsConfig() (*tls.Config, error) {
 		config.RootCAs = caCertPool
 	}
 
-	if c.certFile != "" {
-		if c.keyFile == "" {
+	if certFile != "" {
+		if keyFile == "" {
 			return nil, errors.New("If you're providing a cert file, you must also provide a key file")
 		}
 
-		cert, err := tls.LoadX509KeyPair(c.certFile, c.keyFile)
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			return nil, err
 		}
@@ -228,9 +289,7 @@ func (c *boltConn) tlsConfig() (*tls.Config, error) {
 		config.Certificates = []tls.Certificate{cert}
 	}
 
-	if c.tlsNoVerify {
-		config.InsecureSkipVerify = true
-	}
+	config.InsecureSkipVerify = skipVerify
 
 	return config, nil
 }
@@ -260,20 +319,22 @@ func (c *boltConn) handShake() error {
 	return nil
 }
 
-func (c *boltConn) initialize() error {
+//type conFinder func(connStr string, d *boltDriver) (net.Conn, error)
+
+func (c *boltConn) initialize(d *boltDriver) error {
 
 	// Handle recorder. If there is no conn string, assume we're playing back a recording.
 	// If there is a recorder and a conn string, assume we're recording the connection
 	// Else, just create the conn normally
 	var err error
-	if c.connStr == "" && c.driver != nil && c.driver.recorder != nil {
-		c.conn = c.driver.recorder
-	} else if c.driver != nil && c.driver.recorder != nil {
-		c.driver.recorder.Conn, err = c.createConn()
+	if c.options.Addr == "" && d != nil && d.recorder != nil {
+		c.conn = d.recorder
+	} else if d != nil && d.recorder != nil {
+		d.recorder.Conn, err = c.createConn()
 		if err != nil {
 			return err
 		}
-		c.conn = c.driver.recorder
+		c.conn = d.recorder
 	} else {
 		c.conn, err = c.createConn()
 		if err != nil {
@@ -299,6 +360,7 @@ func (c *boltConn) initialize() error {
 	switch resp := respInt.(type) {
 	case messages.SuccessMessage:
 		log.Infof("Successfully initiated Bolt connection: %+v", resp)
+		c.initedAt = time.Now()
 		return nil
 	default:
 		log.Errorf("Got an unrecognized message when initializing connection :%+v", resp)
@@ -310,7 +372,7 @@ func (c *boltConn) initialize() error {
 
 // Read reads the data from the underlying connection
 func (c *boltConn) Read(b []byte) (n int, err error) {
-	if err := c.conn.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err := c.conn.SetReadDeadline(time.Now().Add(c.options.ReadTimeout)); err != nil {
 		c.connErr = errors.Wrap(err, "An error occurred setting read deadline")
 		return 0, driver.ErrBadConn
 	}
@@ -330,7 +392,7 @@ func (c *boltConn) Read(b []byte) (n int, err error) {
 
 // Write writes the data to the underlying connection
 func (c *boltConn) Write(b []byte) (n int, err error) {
-	if err := c.conn.SetWriteDeadline(time.Now().Add(c.timeout)); err != nil {
+	if err := c.conn.SetWriteDeadline(time.Now().Add(c.options.WriteTimeout)); err != nil {
 		c.connErr = errors.Wrap(err, "An error occurred setting write deadline")
 		return 0, driver.ErrBadConn
 	}
@@ -374,16 +436,20 @@ func (c *boltConn) Close() error {
 		}
 	}
 
-	if c.poolDriver != nil {
-		// If using connection pooling, don't close connection, just reclaim it
-		err := c.poolDriver.reclaim(c)
-		if err != nil {
-			log.Errorf("An error occurred reclaiming connection for pool: %s", err)
-			c.connErr = errors.Wrap(err, "An error occurred closing the connection")
-			return driver.ErrBadConn
-		}
+	if c.pooled {
 		return nil
 	}
+
+	// if c.poolDriver != nil {
+	// 	log.Infof("pool driver != nil")
+	// 	// put back
+	// 	if err := c.poolDriver.put(c); err != nil {
+	// 		log.Errorf("An error occurred reclaiming connection for pool: %s", err)
+	// 		c.connErr = errors.Wrap(err, "An error occurred reclaiming the connection")
+	// 		return driver.ErrBadConn
+	// 	}
+	// 	return nil
+	// }
 
 	err := c.conn.Close()
 	c.closed = true
@@ -399,7 +465,7 @@ func (c *boltConn) ackFailure(failure messages.FailureMessage) error {
 	log.Infof("Acknowledging Failure: %#v", failure)
 
 	ack := messages.NewAckFailureMessage()
-	err := encoding.NewEncoder(c, c.chunkSize).Encode(ack)
+	err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(ack)
 	if err != nil {
 		return errors.Wrap(err, "An error occurred encoding ack failure message")
 	}
@@ -433,7 +499,7 @@ func (c *boltConn) reset() error {
 	log.Info("Resetting session")
 
 	reset := messages.NewResetMessage()
-	err := encoding.NewEncoder(c, c.chunkSize).Encode(reset)
+	err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(reset)
 	if err != nil {
 		return errors.Wrap(err, "An error occurred encoding reset message")
 	}
@@ -536,13 +602,13 @@ func (c *boltConn) Begin() (driver.Tx, error) {
 
 // Sets the size of the chunks to write to the stream
 func (c *boltConn) SetChunkSize(chunkSize uint16) {
-	c.chunkSize = chunkSize
+	c.options.ChunkSize = chunkSize
 }
 
-// Sets the timeout for reading and writing to the stream
-func (c *boltConn) SetTimeout(timeout time.Duration) {
-	c.timeout = timeout
-}
+// // Sets the timeout for reading and writing to the stream
+// func (c *boltConn) SetTimeout(timeout time.Duration) {
+// 	c.timeout = timeout
+// }
 
 func (c *boltConn) consume() (interface{}, error) {
 	log.Info("Consuming response from bolt stream")
@@ -610,7 +676,7 @@ func (c *boltConn) sendInit() (interface{}, error) {
 	log.Infof("Sending INIT Message. ClientID: %s User: %s Password: %s", ClientID, c.user, c.password)
 
 	initMessage := messages.NewInitMessage(ClientID, c.user, c.password)
-	if err := encoding.NewEncoder(c, c.chunkSize).Encode(initMessage); err != nil {
+	if err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(initMessage); err != nil {
 		return nil, errors.Wrap(err, "An error occurred sending init message")
 	}
 
@@ -620,7 +686,7 @@ func (c *boltConn) sendInit() (interface{}, error) {
 func (c *boltConn) sendRun(query string, args map[string]interface{}) error {
 	log.Infof("Sending RUN message: query %s (args: %#v)", query, args)
 	runMessage := messages.NewRunMessage(query, args)
-	if err := encoding.NewEncoder(c, c.chunkSize).Encode(runMessage); err != nil {
+	if err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(runMessage); err != nil {
 		return errors.Wrap(err, "An error occurred running query")
 	}
 
@@ -639,7 +705,7 @@ func (c *boltConn) sendPullAll() error {
 	log.Infof("Sending PULL_ALL message")
 
 	pullAllMessage := messages.NewPullAllMessage()
-	err := encoding.NewEncoder(c, c.chunkSize).Encode(pullAllMessage)
+	err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(pullAllMessage)
 	if err != nil {
 		return errors.Wrap(err, "An error occurred encoding pull all query")
 	}
@@ -707,7 +773,7 @@ func (c *boltConn) sendDiscardAll() error {
 	log.Infof("Sending DISCARD_ALL message")
 
 	discardAllMessage := messages.NewDiscardAllMessage()
-	err := encoding.NewEncoder(c, c.chunkSize).Encode(discardAllMessage)
+	err := encoding.NewEncoder(c, c.options.ChunkSize).Encode(discardAllMessage)
 	if err != nil {
 		return errors.Wrap(err, "An error occurred encoding discard all query")
 	}

@@ -1,4 +1,4 @@
-/*Package golangNeo4jBoltDriver implements a driver for the Neo4J Bolt Protocol.
+/*package bolt implements a driver for the Neo4J Bolt Protocol.
 
 The driver is compatible with Golang's sql.driver interface, but
 aims to implement a more complete featureset in line with what
@@ -92,4 +92,4 @@ If there is an error with the database connection, you should get a sql/driver E
 as per the best practice recommendations of the Golang SQL Driver. However, this error
 may be wrapped, so you might have to call `InnerMost` to get it, as specified above.
 */
-package golangNeo4jBoltDriver
+package bolt

@@ -1,14 +1,14 @@
-package golangNeo4jBoltDriver
+package bolt
 
 import (
 	"database/sql/driver"
 	"io"
 
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/encoding"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/errors"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/log"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/graph"
-	"github.com/johnnadratowski/golang-neo4j-bolt-driver/structures/messages"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/encoding"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/errors"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/log"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/graph"
+	"github.com/axiomzen/golang-neo4j-bolt-driver/structures/messages"
 )
 
 // Rows represents results of rows from the DB
