@@ -65,6 +65,7 @@ var ErrClosed = errors.New("connection is closed")
 
 // todo: add fields that are needed via the other one
 type boltConn struct {
+	// todo: perhaps move this to the driver instead
 	options       *DriverOptions
 	url           *url.URL
 	user          string
@@ -73,15 +74,10 @@ type boltConn struct {
 	connErr       error
 	serverVersion []byte
 	closed        bool
-	// TODO: figure out tls
-	tlsConfig *tls.Config
 
-	//certFile   string
-	//caCertFile string
-	//keyFile    string
-	//tlsNoVerify   bool
-	//poolDriver DriverPool
-	pooled bool
+	// todo: perhaps move this to the driver instead
+	tlsConfig *tls.Config
+	pooled    bool
 
 	transaction *boltTx
 	statement   *boltStmt
@@ -316,8 +312,6 @@ func (c *boltConn) handShake() error {
 
 	return nil
 }
-
-//type conFinder func(connStr string, d *boltDriver) (net.Conn, error)
 
 func (c *boltConn) initialize(d *boltDriver) error {
 
