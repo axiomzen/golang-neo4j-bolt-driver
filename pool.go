@@ -24,6 +24,10 @@ type DriverPool interface {
 	Put(Conn) error
 	// Closed lets you know if we are closed or not
 	Closed() bool
+	// Len gives the size of the pool
+	Len() int
+	// FreeLen gives the number of free connections
+	FreeLen() int
 }
 
 // PoolOptions are the options for the connection pool
@@ -60,8 +64,11 @@ func (bcp *boltConnPool) Closed() bool {
 // Get implements DriverPool.Get
 func (bcp *boltConnPool) Get() (Conn, error) {
 	c, _, e := bcp.pool.Get()
+	if e != nil {
+		return nil, e
+	}
 	ourc := c.(Conn)
-	return ourc, e
+	return ourc, nil
 	// should already come initialized from the factory
 
 	// 	if c.CheckHealth() {
@@ -78,4 +85,12 @@ func (bcp *boltConnPool) Put(c Conn) error {
 	return bcp.pool.Put(c)
 }
 
-// DO all the PG stuff with connection pool handling
+// Len implements DriverPool.Len
+func (bcp *boltConnPool) Len() int {
+	return bcp.pool.Len()
+}
+
+// FreeLen implements DriverPool.FreeLen
+func (bcp *boltConnPool) FreeLen() int {
+	return bcp.pool.FreeLen()
+}

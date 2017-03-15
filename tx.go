@@ -25,10 +25,13 @@ func newTx(conn *boltConn) *boltTx {
 	}
 }
 
+// ErrTxClose is for when you try and close an already closed tx
+var ErrTxClose = errors.New("Transaction already closed")
+
 // Commit commits and closes the transaction
 func (t *boltTx) Commit() error {
 	if t.closed {
-		return errors.New("Transaction already closed")
+		return ErrTxClose
 	}
 	if t.conn.statement != nil {
 		if err := t.conn.statement.Close(); err != nil {
