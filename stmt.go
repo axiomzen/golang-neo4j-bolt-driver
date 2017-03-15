@@ -37,6 +37,9 @@ type PipelineStmt interface {
 	QueryPipeline(params ...map[string]interface{}) (PipelineRows, error)
 }
 
+// ErrStmtAlreadyClosed is when you are trying to exec on a statement that is alreay closed
+var ErrStmtAlreadyClosed = errors.New("Neo4j Bolt statement already closed")
+
 type boltStmt struct {
 	queries []string
 	query   string
@@ -90,7 +93,7 @@ func (s *boltStmt) Exec(args []driver.Value) (driver.Result, error) {
 // ExecNeo executes a query that returns no rows. Implements a Neo-friendly alternative to sql/driver.
 func (s *boltStmt) ExecNeo(params map[string]interface{}) (Result, error) {
 	if s.closed {
-		return nil, errors.New("Neo4j Bolt statement already closed")
+		return nil, ErrStmtAlreadyClosed
 	}
 	if s.rows != nil {
 		return nil, errors.New("Another query is already open")
