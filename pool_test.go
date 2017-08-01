@@ -52,9 +52,6 @@ func TestBoltPool_PoolReusesConnection(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if err != nil {
-			t.Error(err)
-		}
 		_, err = con.ExecNeo("MATCH (n) DETACH DELETE n", nil)
 		if err != nil {
 			t.Error(err)
