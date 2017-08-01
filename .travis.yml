@@ -15,7 +15,7 @@ before_install:
 
 script:
   - go build ./...
-  - BOLT_DRIVER_LOG=info NEO4J_BOLT=bolt://localhost:7687 go test -coverprofile=cover.out -coverpkg=./... -v -race
+  - BOLT_DRIVER_LOG=warn NEO4J_BOLT=bolt://localhost:7687 go test -coverprofile=cover.out -coverpkg=./... -v -race
 
 # jdk:
 #   - oraclejdk7
