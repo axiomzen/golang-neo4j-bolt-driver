@@ -175,7 +175,8 @@ func TestBoltStmt_InvalidArgs(t *testing.T) {
 	}
 	_, err = stmt.QueryNeo(args)
 
-	expected := "Collections containing mixed types can not be stored in properties"
+	//expected := "Collections containing mixed types can not be stored in properties"
+	expected := "Property values can only be of primitive types or arrays thereof"
 	if !strings.Contains(err.Error(), expected) {
 		t.Fatalf("Did not recieve expected error: %s", err)
 	}

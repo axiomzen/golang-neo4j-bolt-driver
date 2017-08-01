@@ -75,6 +75,7 @@ func (bcp *boltConnPool) Get() (Conn, error) {
 // Put implements DriverPool.Put
 func (bcp *boltConnPool) Put(c Conn) error {
 	if err := c.CheckHealth(); err != nil {
+		//fmt.Printf("Put error: %s", err.Error())
 		return bcp.pool.Remove(c, err)
 	}
 	if err := c.Close(); err != nil {
