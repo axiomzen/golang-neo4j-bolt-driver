@@ -1,7 +1,6 @@
 package bolt
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -17,9 +16,6 @@ var (
 	_neo4jConnStr = os.Getenv("NEO4J_BOLT")
 )
 
-// Hook up gocheck into the "go test" runner.
-//func Test(t *testing.T) { check.TestingT(t) }
-
 type PoolTest struct {
 	db   Driver
 	pool DriverPool
@@ -27,10 +23,7 @@ type PoolTest struct {
 
 const poolSize = 10
 
-//var _ = check.Suite(&PoolTest{})
-
 func (t *PoolTest) SetUpTest() {
-	fmt.Println("SETUP TEST")
 	dops := DefaultDriverOptions()
 	if _neo4jConnStr != "" {
 		log.Info("Using NEO4J for tests:", _neo4jConnStr)
@@ -46,7 +39,6 @@ func (t *PoolTest) SetUpTest() {
 }
 
 func (t *PoolTest) TearDownTest() {
-	fmt.Println("TearDownTest")
 	_ = t.pool.Close()
 }
 
@@ -77,12 +69,9 @@ func TestBoltPool_PoolReusesConnection(t *testing.T) {
 		t.Errorf("expected Len to be 1, got %d", p.pool.Len())
 	}
 
-	//c.Assert(p.pool.Len(), check.Equals, 1)
-
 	if p.pool.FreeLen() != 1 {
 		t.Errorf("expected FreeLen to be 1, got %d", p.pool.FreeLen())
 	}
-	//c.Assert(p.pool.FreeLen(), check.Equals, 1)
 }
 
 func perform(n int, cbs ...func(int)) {
@@ -123,9 +112,6 @@ func TestBoltPool_PoolMaxSize(t *testing.T) {
 		}
 	})
 
-	//	c.Assert(p.pool.Len(), check.Equals, poolSize)
-	//	c.Assert(p.pool.FreeLen(), check.Equals, poolSize)
-
 	if p.pool.Len() != poolSize {
 		t.Errorf("expected Len to be %d, got %d", poolSize, p.pool.Len())
 	}
@@ -155,9 +141,6 @@ func TestCloseClosesAllConnections(t *testing.T) {
 		//c.Assert(err, check.IsNil)
 	})
 
-	//c.Assert(p.pool.Len(), check.Equals, poolSize)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 0)
-
 	if p.pool.Len() != poolSize {
 		t.Errorf("expected Len to be %d, got %d", poolSize, p.pool.Len())
 	}
@@ -167,13 +150,10 @@ func TestCloseClosesAllConnections(t *testing.T) {
 	}
 
 	err := p.pool.Close()
-	//c.Assert(err, check.IsNil)
 
 	if err != nil {
 		t.Error(err)
 	}
-	//c.Assert(p.pool.Len(), check.Equals, 0)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 0)
 
 	if p.pool.Len() != 0 {
 		t.Errorf("expected Len to be %d, got %d", 0, p.pool.Len())
@@ -221,13 +201,9 @@ func TestBoltPool_ClosedDB(t *testing.T) {
 	p.SetUpTest()
 	defer p.TearDownTest()
 
-	//c.Assert(p.pool.Close(), check.IsNil)
 	if err := p.pool.Close(); err != nil {
 		t.Error(err)
 	}
-
-	//c.Assert(p.pool.Len(), check.Equals, 0)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 0)
 
 	if p.pool.Len() != 0 {
 		t.Errorf("expected Len to be %d, got %d", 0, p.pool.Len())
@@ -238,12 +214,11 @@ func TestBoltPool_ClosedDB(t *testing.T) {
 	}
 
 	err := p.pool.Close()
-	//c.Assert(err, check.Not(check.IsNil))
+
 	if err == nil {
 		t.Errorf("expected err to not be nil, got %v", err)
 	}
 
-	//c.Assert(err.Error(), check.Equals, interpool.ErrClosed.Error())
 	if err.Error() != interpool.ErrClosed.Error() {
 		t.Errorf("expected err to be %s, got %s", interpool.ErrClosed.Error(), err.Error())
 	}
@@ -253,14 +228,13 @@ func TestBoltPool_ClosedDB(t *testing.T) {
 	// 	err := p.pool.Put(con)
 	// 	c.Assert(err, check.IsNil)
 	// }()
-	//c.Assert(err, check.Not(check.IsNil))
+
 	if err == nil {
 		t.Error("expected err to not be nil")
 	}
 	if err.Error() != interpool.ErrClosed.Error() {
 		t.Errorf("expected err to be %s, got %s", interpool.ErrClosed.Error(), err.Error())
 	}
-	//c.Assert(err.Error(), check.Equals, interpool.ErrClosed.Error())
 }
 
 // func TestClosedListener(t *testing.T) {
@@ -292,13 +266,10 @@ func TestBoltPool_ClosedTx(t *testing.T) {
 	con, err := p.pool.Get()
 
 	tx, err := con.Begin()
-	//c.Assert(err, check.IsNil)
+
 	if err != nil {
 		t.Error(err)
 	}
-
-	//c.Assert(p.pool.Len(), check.Equals, 1)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 0)
 
 	if p.pool.Len() != 1 {
 		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
@@ -311,7 +282,6 @@ func TestBoltPool_ClosedTx(t *testing.T) {
 	if err := tx.Rollback(); err != nil {
 		t.Error(err)
 	}
-	//c.Assert(tx.Rollback(), check.IsNil)
 
 	// for us rolling back doesn't reclaim it
 	//err =
@@ -320,9 +290,6 @@ func TestBoltPool_ClosedTx(t *testing.T) {
 	if err := p.pool.Put(con); err != nil {
 		t.Error(err)
 	}
-
-	//c.Assert(p.pool.Len(), check.Equals, 1)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 1)
 
 	if p.pool.Len() != 1 {
 		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
@@ -340,7 +307,7 @@ func TestBoltPool_ClosedTx(t *testing.T) {
 	//c.Assert(strings.Contains(err.Error()))
 	//fmt.Printf("err: %s, got: %s\n", err.Error(), ErrTxClose.Error())
 	//c.Assert(err.Error(), check.Equals, ErrTxClose.Error())
-	//c.Assert(strings.Contains(err.Error(), "Transaction already closed"), check.Equals, true)
+
 	if !strings.Contains(err.Error(), "Transaction already closed") {
 		t.Errorf("expeced %s to contain %s", err.Error(), "Transaction already closed")
 	}
@@ -375,9 +342,6 @@ func TestBoltPool_ClosedStmt(t *testing.T) {
 		t.Error(err)
 	}
 
-	//c.Assert(p.pool.Len(), check.Equals, 1)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 0)
-
 	if p.pool.Len() != 1 {
 		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
 	}
@@ -394,9 +358,6 @@ func TestBoltPool_ClosedStmt(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
-	//c.Assert(p.pool.Len(), check.Equals, 1)
-	//c.Assert(p.pool.FreeLen(), check.Equals, 1)
 
 	if p.pool.Len() != 1 {
 		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
