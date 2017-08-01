@@ -70,14 +70,14 @@ func (bcp *boltConnPool) Get() (Conn, error) {
 	ourc := c.(Conn)
 	return ourc, nil
 	// should already come initialized from the factory
-
-	// 	if c.CheckHealth() {
-
-	// 	}
 }
 
 // Put implements DriverPool.Put
 func (bcp *boltConnPool) Put(c Conn) error {
+	if err := c.CheckHealth(); err != nil {
+		//fmt.Printf("Put error: %s", err.Error())
+		return bcp.pool.Remove(c, err)
+	}
 	if err := c.Close(); err != nil {
 		// remove if we coudln't cleanup properly
 		return bcp.pool.Remove(c, err)

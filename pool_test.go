@@ -10,15 +10,11 @@ import (
 	"github.com/axiomzen/golang-neo4j-bolt-driver/log"
 	"github.com/axiomzen/interpool"
 	ginkgo "github.com/onsi/ginkgo"
-	check "gopkg.in/check.v1"
 )
 
 var (
 	_neo4jConnStr = os.Getenv("NEO4J_BOLT")
 )
-
-// Hook up gocheck into the "go test" runner.
-func Test(t *testing.T) { check.TestingT(t) }
 
 type PoolTest struct {
 	db   Driver
@@ -27,9 +23,7 @@ type PoolTest struct {
 
 const poolSize = 10
 
-var _ = check.Suite(&PoolTest{})
-
-func (t *PoolTest) SetUpTest(c *check.C) {
+func (t *PoolTest) SetUpTest() {
 	dops := DefaultDriverOptions()
 	if _neo4jConnStr != "" {
 		log.Info("Using NEO4J for tests:", _neo4jConnStr)
@@ -44,22 +38,37 @@ func (t *PoolTest) SetUpTest(c *check.C) {
 	t.pool = t.db.NewConnPool(ops)
 }
 
-func (t *PoolTest) TearDownTest(c *check.C) {
+func (t *PoolTest) TearDownTest() {
 	_ = t.pool.Close()
 }
 
-func (t *PoolTest) TestBoltPool_PoolReusesConnection(c *check.C) {
+func TestBoltPool_PoolReusesConnection(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
+
 	for i := 0; i < 100; i++ {
-		con, err := t.pool.Get()
-		c.Assert(err, check.IsNil)
+		con, err := p.pool.Get()
+		if err != nil {
+			t.Error(err)
+		}
 		_, err = con.ExecNeo("MATCH (n) DETACH DELETE n", nil)
-		c.Assert(err, check.IsNil)
-		err = t.pool.Put(con)
-		c.Assert(err, check.IsNil)
+		if err != nil {
+			t.Error(err)
+		}
+		err = p.pool.Put(con)
+		if err != nil {
+			t.Error(err)
+		}
 	}
 
-	c.Assert(t.pool.Len(), check.Equals, 1)
-	c.Assert(t.pool.FreeLen(), check.Equals, 1)
+	if p.pool.Len() != 1 {
+		t.Errorf("expected Len to be 1, got %d", p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != 1 {
+		t.Errorf("expected FreeLen to be 1, got %d", p.pool.FreeLen())
+	}
 }
 
 func perform(n int, cbs ...func(int)) {
@@ -78,45 +87,82 @@ func perform(n int, cbs ...func(int)) {
 	wg.Wait()
 }
 
-func (t *PoolTest) TestBoltPool_PoolMaxSize(c *check.C) {
+func TestBoltPool_PoolMaxSize(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
+
 	N := 1000
 
 	perform(N, func(int) {
-		con, err := t.pool.Get()
-		c.Assert(err, check.IsNil)
+		con, err := p.pool.Get()
+		if err != nil {
+			t.Error(err)
+		}
 		_, err = con.ExecNeo("MATCH (n) DETACH DELETE n", nil)
-		c.Assert(err, check.IsNil)
-		err = t.pool.Put(con)
-		c.Assert(err, check.IsNil)
+		if err != nil {
+			t.Error(err)
+		}
+		err = p.pool.Put(con)
+		if err != nil {
+			t.Error(err)
+		}
 	})
 
-	c.Assert(t.pool.Len(), check.Equals, poolSize)
-	c.Assert(t.pool.FreeLen(), check.Equals, poolSize)
+	if p.pool.Len() != poolSize {
+		t.Errorf("expected Len to be %d, got %d", poolSize, p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != poolSize {
+		t.Errorf("expected FreeLen to be %d, got %d", poolSize, p.pool.FreeLen())
+	}
 }
 
-func (t *PoolTest) TestCloseClosesAllConnections(c *check.C) {
+func TestCloseClosesAllConnections(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
+
 	N := poolSize
 
 	perform(N, func(int) {
-		con, err := t.pool.Get()
-		c.Assert(err, check.IsNil)
+		con, err := p.pool.Get()
+		if err != nil {
+			t.Error(err)
+		}
 		_, err = con.ExecNeo("MATCH (n) DETACH DELETE n", nil)
-		c.Assert(err, check.IsNil)
-		//err = t.pool.Put(con)
+		if err != nil {
+			t.Error(err)
+		}
+		//err = p.pool.Put(con)
 		//c.Assert(err, check.IsNil)
 	})
 
-	c.Assert(t.pool.Len(), check.Equals, poolSize)
-	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+	if p.pool.Len() != poolSize {
+		t.Errorf("expected Len to be %d, got %d", poolSize, p.pool.Len())
+	}
 
-	err := t.pool.Close()
-	c.Assert(err, check.IsNil)
-	c.Assert(t.pool.Len(), check.Equals, 0)
-	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+	if p.pool.FreeLen() != 0 {
+		t.Errorf("expected FreeLen to be %d, got %d", 0, p.pool.FreeLen())
+	}
+
+	err := p.pool.Close()
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if p.pool.Len() != 0 {
+		t.Errorf("expected Len to be %d, got %d", 0, p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != 0 {
+		t.Errorf("expected FreeLen to be %d, got %d", 0, p.pool.FreeLen())
+	}
 
 }
 
-// func (t *PoolTest) TestCloseClosesAllConnections(c *check.C) {
+// func TestCloseClosesAllConnections(t *testing.T) {
 // 	ln := t.db.Listen("test_channel")
 
 // 	wait := make(chan struct{}, 2)
@@ -143,39 +189,61 @@ func (t *PoolTest) TestCloseClosesAllConnections(c *check.C) {
 // 		c.Fatal("timeout")
 // 	}
 
-// 	c.Assert(t.pool.Len(), check.Equals, 0)
-// 	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+// 	c.Assert(p.pool.Len(), check.Equals, 0)
+// 	c.Assert(p.pool.FreeLen(), check.Equals, 0)
 // }
 
-func (t *PoolTest) TestBoltPool_ClosedDB(c *check.C) {
-	c.Assert(t.pool.Close(), check.IsNil)
+func TestBoltPool_ClosedDB(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
 
-	c.Assert(t.pool.Len(), check.Equals, 0)
-	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+	if err := p.pool.Close(); err != nil {
+		t.Error(err)
+	}
 
-	err := t.pool.Close()
-	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(err.Error(), check.Equals, interpool.ErrClosed.Error())
+	if p.pool.Len() != 0 {
+		t.Errorf("expected Len to be %d, got %d", 0, p.pool.Len())
+	}
 
-	_, err = t.pool.Get()
+	if p.pool.FreeLen() != 0 {
+		t.Errorf("expected FreeLen to be %d, got %d", 0, p.pool.FreeLen())
+	}
+
+	err := p.pool.Close()
+
+	if err == nil {
+		t.Errorf("expected err to not be nil, got %v", err)
+	}
+
+	if err.Error() != interpool.ErrClosed.Error() {
+		t.Errorf("expected err to be %s, got %s", interpool.ErrClosed.Error(), err.Error())
+	}
+
+	_, err = p.pool.Get()
 	// defer func() {
-	// 	err := t.pool.Put(con)
+	// 	err := p.pool.Put(con)
 	// 	c.Assert(err, check.IsNil)
 	// }()
-	c.Assert(err, check.Not(check.IsNil))
-	c.Assert(err.Error(), check.Equals, interpool.ErrClosed.Error())
+
+	if err == nil {
+		t.Error("expected err to not be nil")
+	}
+	if err.Error() != interpool.ErrClosed.Error() {
+		t.Errorf("expected err to be %s, got %s", interpool.ErrClosed.Error(), err.Error())
+	}
 }
 
-// func (t *PoolTest) TestClosedListener(c *check.C) {
+// func TestClosedListener(t *testing.T) {
 // 	ln := t.db.Listen("test_channel")
 
-// 	c.Assert(t.pool.Len(), check.Equals, 1)
-// 	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+// 	c.Assert(p.pool.Len(), check.Equals, 1)
+// 	c.Assert(p.pool.FreeLen(), check.Equals, 0)
 
 // 	c.Assert(ln.Close(), check.IsNil)
 
-// 	c.Assert(t.pool.Len(), check.Equals, 0)
-// 	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+// 	c.Assert(p.pool.Len(), check.Equals, 0)
+// 	c.Assert(p.pool.FreeLen(), check.Equals, 0)
 
 // 	err := ln.Close()
 // 	c.Assert(err, Not(check.IsNil))
@@ -187,69 +255,131 @@ func (t *PoolTest) TestBoltPool_ClosedDB(c *check.C) {
 // }
 
 // this test is problematic
-func (t *PoolTest) TestBoltPool_ClosedTx(c *check.C) {
-	con, err := t.pool.Get()
+func TestBoltPool_ClosedTx(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
+
+	con, err := p.pool.Get()
 
 	tx, err := con.Begin()
-	c.Assert(err, check.IsNil)
 
-	c.Assert(t.pool.Len(), check.Equals, 1)
-	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+	if err != nil {
+		t.Error(err)
+	}
 
-	c.Assert(tx.Rollback(), check.IsNil)
+	if p.pool.Len() != 1 {
+		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != 0 {
+		t.Errorf("expected FreeLen to be %d, got %d", 0, p.pool.FreeLen())
+	}
+
+	if err := tx.Rollback(); err != nil {
+		t.Error(err)
+	}
 
 	// for us rolling back doesn't reclaim it
-	err = t.pool.Put(con)
-	c.Assert(err, check.IsNil)
+	//err =
+	//c.Assert(err, check.IsNil)
 
-	c.Assert(t.pool.Len(), check.Equals, 1)
-	c.Assert(t.pool.FreeLen(), check.Equals, 1)
+	if err := p.pool.Put(con); err != nil {
+		t.Error(err)
+	}
+
+	if p.pool.Len() != 1 {
+		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != 1 {
+		t.Errorf("expected FreeLen to be %d, got %d", 1, p.pool.FreeLen())
+	}
 
 	err = tx.Rollback()
-	c.Assert(err, check.Not(check.IsNil))
+	if err == nil {
+		t.Error("expected err not to be nil")
+	}
+	//c.Assert(err, check.Not(check.IsNil))
 	//c.Assert(strings.Contains(err.Error()))
 	//fmt.Printf("err: %s, got: %s\n", err.Error(), ErrTxClose.Error())
 	//c.Assert(err.Error(), check.Equals, ErrTxClose.Error())
-	c.Assert(strings.Contains(err.Error(), "Transaction already closed"), check.Equals, true)
+
+	if !strings.Contains(err.Error(), "Transaction already closed") {
+		t.Errorf("expeced %s to contain %s", err.Error(), "Transaction already closed")
+	}
 
 	// Neo4j lets you do multiple transactions over the same connection?
-	con, err = t.pool.Get()
-	c.Assert(err, check.IsNil)
+	con, err = p.pool.Get()
+	if err != nil {
+		t.Error(err)
+	}
 	_, err = con.ExecNeo("MATCH (n) DETACH DELETE n", nil)
-	c.Assert(err, check.IsNil)
+	if err != nil {
+		t.Error(err)
+	}
 	// TODO:
 	//c.Assert(err.Error(), check.Equals, "pg: transaction has already been committed or rolled back")
 
-	err = t.pool.Put(con)
-	c.Assert(err, check.IsNil)
+	err = p.pool.Put(con)
+	if err != nil {
+		t.Error(err)
+	}
 }
 
-func (t *PoolTest) TestBoltPool_ClosedStmt(c *check.C) {
-	con, err := t.pool.Get()
+func TestBoltPool_ClosedStmt(t *testing.T) {
+	p := PoolTest{}
+	p.SetUpTest()
+	defer p.TearDownTest()
+
+	con, err := p.pool.Get()
 
 	stmt, err := con.PrepareNeo("MATCH (n) DETACH DELETE n")
-	c.Assert(err, check.IsNil)
+	if err != nil {
+		t.Error(err)
+	}
 
-	c.Assert(t.pool.Len(), check.Equals, 1)
-	c.Assert(t.pool.FreeLen(), check.Equals, 0)
+	if p.pool.Len() != 1 {
+		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
+	}
 
-	c.Assert(stmt.Close(), check.IsNil)
+	if p.pool.FreeLen() != 0 {
+		t.Errorf("expected FreeLen to be %d, got %d", 0, p.pool.FreeLen())
+	}
+
+	if err := stmt.Close(); err != nil {
+		t.Error(err)
+	}
 	// for us statement close doesn't reclaim it
-	err = t.pool.Put(con)
-	c.Assert(err, check.IsNil)
+	err = p.pool.Put(con)
+	if err != nil {
+		t.Error(err)
+	}
 
-	c.Assert(t.pool.Len(), check.Equals, 1)
-	c.Assert(t.pool.FreeLen(), check.Equals, 1)
+	if p.pool.Len() != 1 {
+		t.Errorf("expected Len to be %d, got %d", 1, p.pool.Len())
+	}
+
+	if p.pool.FreeLen() != 1 {
+		t.Errorf("expected FreeLen to be %d, got %d", 1, p.pool.FreeLen())
+	}
 
 	err = stmt.Close()
 	// this driver doesn't care if you close twice
 	//c.Assert(err, check.Not(check.IsNil))
 	//c.Assert(err.Error(), check.Equals, "pg: statement is closed")
-	c.Assert(err, check.IsNil)
+	if err != nil {
+		t.Error(err)
+	}
 
 	_, err = stmt.ExecNeo(nil)
-	c.Assert(err.Error(), check.Equals, ErrStmtAlreadyClosed.Error())
+	if err.Error() != ErrStmtAlreadyClosed.Error() {
+		t.Errorf("expected %s to equal %s", err.Error(), ErrStmtAlreadyClosed.Error())
+	}
+	//c.Assert(err.Error(), check.Equals, ErrStmtAlreadyClosed.Error())
 
-	//err = t.pool.Put(con)
-	//c.Assert(err, check.IsNil)
+	//err = p.pool.Put(con)
+	//	if err != nil {
+	//	t.Error(err)
+	//}
 }
